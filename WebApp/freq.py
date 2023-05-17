@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
 import requests
-from models import *
-import json
-from datetime import datetime
+import datetime
+from datetime import datetime as dt
+import pandas as pd
+import os
 
 freq = Blueprint('freq', __name__)
 
@@ -14,39 +15,64 @@ def get_students_json(api_route):
     return request_json.json()
 
 def get_today_info():
-    today = datetime.now().strftime("%A")
-    time = datetime.now().strftime("%H:%M")
-    return today, time
+    today = dt.now().strftime("%A")
+    time = dt.now().strftime("%H:%M")
+    date = dt.now().strftime("%d/%m/%Y")
+    return today, time, date
 
-DUMMY_HASH = '6235386135613538'
-translated_hash = bytes.fromhex(DUMMY_HASH).decode('utf-8')
-estudantes = get_students_json(API_ROUTE)
-student = estudantes.get(translated_hash)
-today, time = get_today_info()
-key_may = list(student.keys())[0]
-student_name = student[key_may]['nome']
-student_id_person = student[key_may]['idPerson']
-student_timetable = student[key_may]['horarios'].get(today)
-print(student_timetable)
+def validade_time(start, end, time, minutes=15):
+    # start - 30 min
+    start = dt.strptime(start, "%H:%M")
+    start = start - datetime.timedelta(minutes=minutes)
+    start = start.strftime("%H:%M")
+    # end + 30 min
+    end = dt.strptime(end, "%H:%M")
+    end = end + datetime.timedelta(minutes=minutes)
+    end = end.strftime("%H:%M")
 
+    if start <= time and end >= time:
+        return True
+    return False
+
+PATH_DATA = './data/today.csv'
 
 @freq.route('/frequencia', methods=['GET'])
 def get_data():
     rfid_hash = request.args.get('cardData')
-    rfid_hash = "C59"
 
+    translated_hash = str(bytes.fromhex(rfid_hash).decode('utf-8'))
+    students = get_students_json(API_ROUTE)
+    student = students.get(translated_hash)
+    if student != None:
+        df_today = pd.read_csv(PATH_DATA, sep=';')
 
-    for aluno in lista_alunos:
-        if (rfid_hash.upper() in aluno['rfid_hash']):
-            aluno_nome = aluno['nome']
-            aluno_curso = aluno['curso']
-            aluno_matricula = aluno['matricula']
-            
-            for horario in lista_horarios:
-                if (aluno_curso in horario['course']['name'][5:]):
-                    resposta = aluno_curso
+        key_mat = list(student.keys())[0]
+        student_id_user = student[key_mat]['idUser']
+        student_name = student[key_mat]['nome']
+        student_name = student_name.split(' ')
+        student_name = str(student_name[0] + ' ' + student_name[-1])
+        today, time, date = get_today_info()
+        for studant_class in student[key_mat]['horarios'].get(today):
+            class_id = studant_class['idClass']
+            subject_id = studant_class['idSubject']
+            class_name = str(studant_class['subjectName'])
+            start = studant_class['hourStart']
+            end = studant_class['hourEnd']
+            if validade_time(start, end, time):
+                if df_today[(df_today['idUser'] == student_id_user) & (df_today['idClass'] == class_id)].empty:
+                    status = 1
+                    df_today = df_today._append({'date':date, 'weekday':today, 'idUser':student_id_user, 'idClass':class_id, 'idSubject':subject_id, 'start':start, 'end':end, 'startTime':time, 'status':status}, ignore_index=True)
+                    break
+                else:
+                    df_today = df_today[(df_today['idUser'] == student_id_user) & (df_today['idClass'] == class_id)]
+                    status = int(df_today['status'][0]) + 1
+                    df_today['endTime'] = time
+                    df_today['status'] = status
+                    break
+        class_name = class_name if class_name != None else 'disciplina nao identificada'
+        df_today.to_csv(PATH_DATA, sep=';', index=False)
+        return jsonify([1, class_name, student_name, translated_hash, status])
+    class_name = class_name if class_name != None else 'disciplina nao identificada'
+    student_name = student_name if student_name != None else 'aluno nao identificado'
+    return jsonify([0, class_name, student_name, translated_hash, 0])
 
-            return jsonify([1, aluno_nome, resposta, rfid_hash])
-    else:
-        resposta = "Rejeitado"
-        return jsonify([0, rfid_hash, resposta])

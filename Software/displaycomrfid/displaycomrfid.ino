@@ -22,7 +22,7 @@
 //Led RGB 2------------------------
 #define LED2_R 33
 #define LED2_G 32
-#define LED2_B 35
+#define LED2_B 14
 //Pino Buzzer Passivo--------------
 #define BUZZ_PIN 13
 //Pinos I2C para Display ----------
@@ -35,8 +35,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET); // cri
 MFRC522 mfrc522(SS_PIN, RST_PIN); // cria instancia MFRC522.
 
 //*****************************CREDENCIAIS*******************************************
-const char *ssid = "CEV LAB 02";
-const char *password = "cev@lab@";
+const char *ssid = "coelho";
+const char *password = "123456789";
 const char* device_token  = "Modulo teste";
 
 //*****************************API TEMPO & API RFID*******************************************
@@ -187,12 +187,11 @@ void setup() {
   //---------------------------------------------
   configTime(timezone, time_dst, "pool.ntp.org","time.nist.gov");
   //---------------------------------------------
-  LED("branco");
+  
 }
 
 //*****************************CICLO DE FUNCIONAMENTO NORMAL DO ESP32*******************************************
 void loop() {
-  LED("branco");
   // Checagem da conexão de wifi
   if(!WiFi.isConnected()){
     connectToWiFi();    //re-testagem da conexão de wifi

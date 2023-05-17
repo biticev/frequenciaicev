@@ -1,5 +1,5 @@
 flask
-flask-sqlalchemy
+Flask-SQLAlchemy
 flask-login
 werkzeug
 pandas
