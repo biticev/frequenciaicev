@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, flash
 from flask_login import login_required, current_user
-from __init__ import create_app, db
+from config import db, create_app
 from models import *
 from sendfreq import run_script
 import atexit
