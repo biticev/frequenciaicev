@@ -5,23 +5,23 @@ from flask_login import LoginManager
 
 db = SQLAlchemy()
 def create_app():
-    app = Flask(__name__) # creates the Flask instance, __name__ is  
+    aplication = Flask(__name__) # creates the Flask instance, __name__ is  
                           # the name of the current Python module
-    app.config['SECRET_KEY'] = 'secret-key-goes-here' # it is used 
+    aplication.config['SECRET_KEY'] = 'secret-key-goes-here' # it is used 
                          #by Flask and extensions to keep data safe
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite' 
+    aplication.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite' 
                    #it is the path where the SQLite database file 
                    #will be saved
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
+    aplication.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
                    # deactivate Flask-SQLAlchemy track modifications
-    db.init_app(app) # Initialiaze sqlite database
+    db.init_app(aplication) # Initialiaze sqlite database
     # The login manager contains the code that lets your application    
     # and Flask-Login work together
     login_manager = LoginManager() # Create a Login Manager instance
     login_manager.login_view = 'auth.login' # define the redirection 
                          # path when login required and we attempt 
                          # to access without being logged in
-    login_manager.init_app(app) # configure it for login
+    login_manager.init_app(aplication) # configure it for login
 
     from models import User
     @login_manager.user_loader
@@ -33,11 +33,11 @@ def create_app():
     # blueprint for auth routes in our app
     # blueprint allow you to orgnize your flask app
     from auth import auth as auth_blueprint
-    app.register_blueprint(auth_blueprint)
+    aplication.register_blueprint(auth_blueprint)
     # blueprint for non-auth parts of app
     from app import main as main_blueprint
-    app.register_blueprint(main_blueprint)
+    aplication.register_blueprint(main_blueprint)
     # blueprint for non-auth parts of app
     from freq import freq as freq_blueprint
-    app.register_blueprint(freq_blueprint)
-    return app
+    aplication.register_blueprint(freq_blueprint)
+    return aplication

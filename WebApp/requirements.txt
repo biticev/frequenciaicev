@@ -3,3 +3,5 @@ Flask-SQLAlchemy
 flask-login
 werkzeug
 pandas
+requests
+apscheduler
