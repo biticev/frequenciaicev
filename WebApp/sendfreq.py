@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime 
-
+from flask import jsonify
 import os
 import requests
 
@@ -84,6 +84,7 @@ def run_script():
     df = calculate_interval_data(df)
 
     list_time_columns = ['start', 'end', 'startTime', 'endTime']
+
     for col in list_time_columns:
         df[col] = df.apply(lambda x: transform_time_to_especificTime(x['date'], x[col]), axis=1)
 
@@ -95,6 +96,7 @@ def run_script():
     save_transfomed_df(df_transformed)
     save_to_retry_df(df_transformed)
     clean_df_today(df)
+    return jsonify({'message': 'Script executed successfully', 'status':200,"df":df_transformed.to_json()})
 
 if __name__ == "__main__":
     run_script()

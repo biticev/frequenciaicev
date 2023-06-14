@@ -3,9 +3,13 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include <stdlib.h>
+#include <ArduinoJson.h>
+
 //RFID-----------------------------
 #include <SPI.h>
 #include <MFRC522.h>
+
 //OLED-----------------------------
 #include <Wire.h>
 #include <Adafruit_GFX.h>          //https://github.com/adafruit/Adafruit-GFX-Library
@@ -15,16 +19,20 @@
 //Pinos RFID-----------------------
 #define SS_PIN  5 
 #define RST_PIN 2
+
 //Led RGB 1------------------------
 #define LED1_R 27
 #define LED1_G 26
 #define LED1_B 25
+
 //Led RGB 2------------------------
 #define LED2_R 33
 #define LED2_G 32
 #define LED2_B 14
+
 //Pino Buzzer Passivo--------------
 #define BUZZ_PIN 13
+
 //Pinos I2C para Display ----------
 #define SCREEN_WIDTH 128 // OLED display largura, em pixels
 #define SCREEN_HEIGHT 64 // OLED display altura, em pixels
@@ -37,10 +45,10 @@ MFRC522 mfrc522(SS_PIN, RST_PIN); // cria instancia MFRC522.
 //*****************************CREDENCIAIS*******************************************
 const char *ssid = "coelho";
 const char *password = "123456789";
-const char* device_token  = "Modulo teste";
+const char* device_token  = "Modulo de teste";
 
 //*****************************API TEMPO & API RFID*******************************************
-int timezone = -3 * 3600;   //Replace "x" your timezone.
+int timezone = -3 * 3600;   // Fuso horario -3
 int time_dst = 0;
 String getData, Link;
 String OldCardID = "";
@@ -163,59 +171,50 @@ void setup() {
   SPI.begin();  // Inicia SPI
   mfrc522.PCD_Init(); // Inicia RFID
   //-----------Inicia o OLED display-------------
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Endereço 0x3D para display 128x64
     Serial.println(F("SSD1306 allocation failed"));
     for(;;); // Loop infinito enquanto não iniciar
   }
+
   //------------Setando modo dos pinos-----------
   //Led 1------------------
   pinMode(LED1_R, OUTPUT); 
   pinMode(LED1_G, OUTPUT); 
   pinMode(LED1_B, OUTPUT);
+
   //Led 2------------------ 
   pinMode(LED2_R, OUTPUT);
   pinMode(LED2_G, OUTPUT); 
   pinMode(LED2_B, OUTPUT);  
+
   //Buzz ------------------
   pinMode(BUZZ_PIN, OUTPUT);
+  
   // you can delet these three lines if you don't want to get the Adfruit logo appear
   //display.display();
   //delay(2000); // Pause for 2 seconds
   //display.clearDisplay();
+
   //---------------------------------------------
   connectToWiFi();
+  delay(1000);
   //---------------------------------------------
   configTime(timezone, time_dst, "pool.ntp.org","time.nist.gov");
+  delay(1000);
   //---------------------------------------------
-  
+  LED("branco");
 }
 
 //*****************************CICLO DE FUNCIONAMENTO NORMAL DO ESP32*******************************************
 void loop() {
+  LED("branco");
   // Checagem da conexão de wifi
   if(!WiFi.isConnected()){
     connectToWiFi();    //re-testagem da conexão de wifi
   }
   //---------------------------------------------
   if (millis() - previousMillis1 >= 1000) {
-    previousMillis1 = millis();
-    display.clearDisplay();
-    
-    time_t now = time(nullptr);
-    struct tm* p_tm = localtime(&now);
-    display.setTextSize(1);             // Normal 2:2 pixel scale
-    display.setTextColor(WHITE);        // Draw white text
-    display.setCursor(10,0);
-    Serial.println(p_tm);
-    display.setTextSize(4);             // Normal 2:2 pixel scale
-    display.setTextColor(WHITE);        // Draw white text
-    display.setCursor(0,21);
-    if ((p_tm->tm_hour)<10) {display.print("0");display.print(p_tm->tm_hour);}
-    else display.print(p_tm->tm_hour);
-    display.print(":");
-    if ((p_tm->tm_min)<10) {display.print("0");display.println(p_tm->tm_min);}
-    else display.println(p_tm->tm_min);
-    display.display();
+    writeTimeDisplay();
   }
   //---------------------------------------------
   if (millis() - previousMillis2 >= 15000) {
@@ -223,6 +222,7 @@ void loop() {
     OldCardID="";
   }
   delay(50);
+  Serial.println("Esperando Cartão");
   //---------------------------------------------
   //look for new card
   if ( ! (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial())) {
@@ -237,7 +237,7 @@ void loop() {
     Serial.print(mfrc522.uid.uidByte[i], HEX);
     CardID += String(mfrc522.uid.uidByte[i], HEX);
   }
-  Serial.println();
+  Serial.println("leu cartão");
   //---------------------------------------------
   if( CardID == OldCardID ){
     return;
@@ -248,60 +248,36 @@ void loop() {
   //---------------------------------------------
 //  Serial.println(CardID);
   //SendCardID(CardID);
+  Serial.println("vai enviar cartão");
   sendToServer(CardID);
   delay(1000);
   display.clearDisplay();
 }
-//************send the Card UID to the website*************
-void sendToServer(String cardData) {
-  Serial.println("Sending the Card ID");
 
-  // Cria uma instância do cliente HTTP
-  HTTPClient http;
-  
-  // Monta a URL completa do servidor com os dados do cartão
-  String url = URL + "?cardData=" + cardData;
-  
-  // Envia a requisição GET para o servidor
-  http.begin(url);
-  int httpCode = http.GET();
-  
-  // Verifica o código de resposta HTTP
-  if (httpCode > 0) {
-    String payload = http.getString();
-    Serial.println("Resposta do servidor: " + payload);
-    if (payload.substring(1) == "1"){
-      Serial.println("Aprovado");
-      LED("verde");
-      tone(BUZZ_PIN, 150);
-      EscreverDisplay(payload);
-      delay(1000);
-      noTone(BUZZ_PIN);
-      LED("branco");
-    }
-    else if (payload.substring(1) == "0"){
-      Serial.println("Negado");
-      LED("vermelho");
-      tone(BUZZ_PIN, 255);
-      EscreverDisplay(payload);
-      delay(1000);
-      noTone(BUZZ_PIN);
-      LED("branco");
-    }
-    else {
-      Serial.println("Nada");
-      LED("vermelho");
-      tone(BUZZ_PIN, 255);
-      EscreverDisplay(payload);
-      delay(2000);
-      noTone(BUZZ_PIN);
-      LED("branco");
-    }
-  } else {
-    Serial.println("Falha na conexão com o servidor");
-  }
-  // Fecha a conexão HTTP
-  http.end();
+//************write datetime on the display*************
+void writeTimeDisplay(){
+  previousMillis1 = millis();
+  display.clearDisplay();
+    
+  time_t now = time(nullptr);
+  struct tm* p_tm = localtime(&now);
+  display.setTextSize(1);             // Normal 2:2 pixel scale
+  display.setTextColor(WHITE);        // Draw white text
+  display.setCursor(10,0);
+  Serial.println(p_tm);
+
+  display.setTextSize(4);             // Normal 2:2 pixel scale
+  display.setTextColor(WHITE);        // Draw white text
+  display.setCursor(0,21);
+  if ((p_tm->tm_hour)<10) {display.print("0");display.print(p_tm->tm_hour);}
+  else display.print(p_tm->tm_hour);
+
+  display.print(":");
+
+  if ((p_tm->tm_min)<10) {display.print("0");display.println(p_tm->tm_min);}
+  else display.println(p_tm->tm_min);
+
+  display.display();
 }
 
 //********************Conectar na WiFi******************
@@ -345,18 +321,84 @@ void connectToWiFi(){
     delay(1000);
 }
 
+//************send the Card UID to the website*************
+void sendToServer(String cardData) {
+  Serial.println("Sending the Card ID");
+
+  // Cria uma instância do cliente HTTP
+  HTTPClient http;
+  
+  // Monta a URL completa do servidor com os dados do cartão
+  String url = URL + "?cardData=" + cardData;
+  
+  // Envia a requisição GET para o servidor
+  http.begin(url);
+  int httpCode = http.GET();
+  // Verifica o código de resposta HTTP
+
+  DynamicJsonDocument jsonBuffer(1024);
+
+  if (httpCode == 200) {
+    Serial.println("Recebendo payload");
+    String payload = http.getString();  
+    DeserializationError error = deserializeJson(jsonBuffer, payload);
+    Serial.println(error.c_str());
+    String code = jsonBuffer[0];
+    String subject = jsonBuffer[1];
+    String name = jsonBuffer[2];
+
+    if (code == "1"){
+      Serial.println("Aprovado");
+      LED("verde");
+      EscreverDisplay(code, name, subject);
+      tone(BUZZ_PIN, 1000, 200);
+      delay(550);
+      tone(BUZZ_PIN, 1000, 200);
+    }
+
+    else if (code == "0"){
+      Serial.println("Negado");
+      LED("vermelho");
+      EscreverDisplay(code, name, subject);
+      tone(BUZZ_PIN, 2000, 500);
+      delay(550);
+    }
+
+    else {
+      Serial.println(code);
+    }
+  } 
+  else {
+    Serial.println("Falha na conexão com o servidor");
+  }
+  // Fecha a conexão HTTP
+  http.end();
+}
+
 //********************Escrever Display******************
-void EscreverDisplay(String payload){
-  String nome = payload.substring(1);
-  String materia =  payload.substring(2);
+void EscreverDisplay(String code, String name, String subject){
+  display.clearDisplay();
+  display.setTextSize(3);
+  display.setTextColor(WHITE);
+  display.setCursor(10,0);
+  if (code == "1") {
+    display.print("Registrado");
+  }
+  else {
+    display.print("Negado");
+  }
+  display.display();
+  delay(200);
+
   display.clearDisplay();
   display.setTextSize(2);             // Normal 2:2 pixel scale
   display.setTextColor(WHITE);        // Draw white text
   display.setCursor(10,0);             // Start at top-left corner
-  display.print(nome);
+  display.print(name);
   display.setCursor(0,20);
-  display.print(materia);
+  display.print(subject);
   display.display();
+  delay(200);
 }
 
 //********************Gerenciar LEDs******************
@@ -367,9 +409,9 @@ void LED(String cor){
     analogWrite(LED1_G, 255);
     analogWrite(LED1_B, 255);
     // Led 2
-    analogWrite(LED2_R, 255);
-    analogWrite(LED2_G, 255);
-    analogWrite(LED2_B, 255);
+    analogWrite(LED2_R, 0);
+    analogWrite(LED2_G, 0);
+    analogWrite(LED2_B, 0);
   }
   else if (cor == "amarelo"){
     // Led 1
@@ -377,9 +419,9 @@ void LED(String cor){
     analogWrite(LED1_G, 241);
     analogWrite(LED1_B, 26);
     // Led 2
-    analogWrite(LED2_R, 253);
-    analogWrite(LED2_G, 241);
-    analogWrite(LED2_B, 26);
+    analogWrite(LED2_R, 0);
+    analogWrite(LED2_G, 0);
+    analogWrite(LED2_B, 0);
   }
   else if (cor == "vermelho"){
     // Led 1

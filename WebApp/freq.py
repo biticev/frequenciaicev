@@ -4,6 +4,12 @@ import datetime
 from datetime import datetime as dt
 import pandas as pd
 import os
+from sendfreq import run_script
+
+dict_uid_translation = {
+    '95a2a353':'b58a5a58',
+    'b58a5a58':'b58a5a58',
+}
 
 freq = Blueprint('freq', __name__)
 
@@ -30,22 +36,27 @@ def validade_time(start, end, time, minutes=15):
     end = end + datetime.timedelta(minutes=minutes)
     end = end.strftime("%H:%M")
 
+    print(start, end, time)
+
     if start <= time and end >= time:
         return True
     return False
 
 PATH_DATA = './data/today.csv'
+print("Carregando arquivo de registros de hoje...")
+df_today = pd.read_csv(PATH_DATA, sep=';')
+students = get_students_json(API_ROUTE)
 
 @freq.route('/frequencia', methods=['GET'])
 def get_data():
+    global df_today
+    global students
     rfid_hash = request.args.get('cardData')
-
-    translated_hash = str(bytes.fromhex(rfid_hash).decode('utf-8'))
-    students = get_students_json(API_ROUTE)
+    translated_hash = dict_uid_translation.get(rfid_hash)
     student = students.get(translated_hash)
-    if student != None:
-        df_today = pd.read_csv(PATH_DATA, sep=';')
+    
 
+    if student != None:
         key_mat = list(student.keys())[0]
         student_id_user = student[key_mat]['idUser']
         student_name = student[key_mat]['nome']
@@ -70,9 +81,13 @@ def get_data():
                     df_today['status'] = status
                     break
         class_name = class_name if class_name != None else 'disciplina nao identificada'
-        df_today.to_csv(PATH_DATA, sep=';', index=False)
+        if len(df_today) % 3 == 0:
+            df_today.to_csv(PATH_DATA, sep=';', index=False)
         return jsonify([1, class_name, student_name, translated_hash, status])
     class_name = class_name if class_name != None else 'disciplina nao identificada'
     student_name = student_name if student_name != None else 'aluno nao identificado'
     return jsonify([0, class_name, student_name, translated_hash, 0])
 
+@freq.route('/enviarfrequencia', methods=['GET'])
+def sendfreq():
+    run_script()
